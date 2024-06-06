@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "KungFuFlash2")(type "KiCad")(uri "${KIPRJMOD}/KungFuFlash2.kicad_sym")(options "")(descr ""))
+)
