@@ -37,6 +37,8 @@ static u32 freezer_state;
 #include "simons_basic.c"
 #include "super_games.c"
 #include "epyx_fastload.c"
+#include "westerman.c"
+#include "rexutil.c"
 #include "c64gs_system_3.c"
 #include "warpspeed.c"
 #include "dinamic.c"
@@ -44,6 +46,7 @@ static u32 freezer_state;
 #include "magic_desk.c"
 #include "super_snapshot_5.c"
 #include "comal80.c"
+#include "ross.c"
 #include "easyflash.c"
 #include "easyflash_3.c"
 #include "prophet64.c"
@@ -106,6 +109,15 @@ static void (*crt_get_handler(u32 cartridge_type, bool vic_support)) (void)
 
         case CRT_COMAL_80:
             return comal80_handler;
+
+	    case CRT_ROSS:
+	        return ross_handler;
+
+        case CRT_REX_UTILITY:
+            return rexutil_handler;
+        
+        case CRT_WESTERMANN_LEARNING:
+            return westerman_handler;
 
         case CRT_OCEAN_TYPE_1:
         case CRT_EASYFLASH:
@@ -177,6 +189,18 @@ static void crt_init(CFG_CRT_HEADER *crt_header)
 
         case CRT_COMAL_80:
             comal80_init();
+            break;
+
+        case CRT_ROSS:
+            ross_init();
+            break;
+
+        case CRT_REX_UTILITY:
+            rexutil_init();
+            break;
+
+        case CRT_WESTERMANN_LEARNING:
+            westerman_init();
             break;
 
         case CRT_EASYFLASH:
