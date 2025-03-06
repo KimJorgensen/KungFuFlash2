@@ -58,6 +58,9 @@ The following cartridge types are currently supported:
 * Drean
 * C128 Generic cartridge (external function ROM)
 * WarpSpeed 128
+* Ross Cartridge
+* Westerman Learning System
+* Rex Utility
 
 ## Supported File Types
 
