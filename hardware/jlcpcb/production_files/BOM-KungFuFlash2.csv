@@ -1,0 +1,25 @@
+Comment,Designator,Footprint,LCSC
+uSD_push_push,XS1,Conn_uSDcard,C111196
+100n,"C10,C13,C14,C15,C16,C17,C18,C19,C3,C4,C5,C6,C9",C_0603_1608Metric_Pad1.08x0.95mm_HandSolder,C14663
+10u,"C1,C2",C_0805_2012Metric_Pad1.18x1.45mm_HandSolder,C15850
+20p,"C7,C8",C_0603_1608Metric_Pad1.08x0.95mm_HandSolder,C1648
+USB_C_Receptacle_USB2.0,J4,USB_C_Receptacle_XKB_U262-16XN-4BVC11,C165948
+100R,"R10,R11,R12,R13,R14,R15,R8,R9",R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,C17408
+10k,"R16,R17,R2,R3",R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,C17414
+510R,"R1,R4,R5,R6,R7",R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,C17734
+BC817,Q1,SOT-23,C2145
+LED,D1,LED_0805_2012Metric_Pad1.15x1.40mm_HandSolder,C2297
+2.2u,"C11,C12",C_0805_2012Metric_Pad1.18x1.45mm_HandSolder,C377773
+AMS1117-3.3,U2,SOT-223-3_TabPin2,C6186
+D_Schottky,"D2,D3",D_SMA_Handsoldering,C64998
+STM32H7B0VBTx,U3,LQFP-100_14x14mm_P0.5mm,C730227
+25 MHz,Y1,Crystal_SMD_3225-4Pin_3.2x2.5mm,C9006
+Menu,SW2,SW_PUSH_6mm_H8mm,
+C64-Exp-Port,U1,C64-Cart,
+Special,SW3,SW_PUSH_6mm_H8mm,
+Reset,SW1,SW_PUSH_6mm_H8mm,
+~,TP2,TestPoint_Pad_1.0x1.0mm,
+~,TP3,TestPoint_Pad_1.0x1.0mm,
+~,TP1,TestPoint_Pad_1.0x1.0mm,
+Wifi,J3,PinSocket_2x04_P2.54mm_Vertical,
+SWD,J1,PinHeader_1x05_P2.54mm_Vertical,
