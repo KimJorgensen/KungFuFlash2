@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 Kim Jørgensen
+ * Copyright (c) 2019-2025 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -264,9 +264,10 @@ static s32 crt_get_offset(CRT_CHIP_HEADER *header, u16 cartridge_type)
     return offset;
 }
 
-static bool crt_load_file(FIL *crt_file, u16 cartridge_type)
+static u8 crt_load_file(FIL *crt_file, u16 cartridge_type)
 {
     memset(crt_buf, 0xff, sizeof(crt_buf));
+    u8 banks_in_use = 0;
 
     while (!f_eof(crt_file))
     {
@@ -274,7 +275,7 @@ static bool crt_load_file(FIL *crt_file, u16 cartridge_type)
         if (!crt_load_chip_header(crt_file, &header))
         {
             err("Failed to read CRT chip header");
-            return false;
+            return 0;
         }
 
         s32 offset = crt_get_offset(&header, cartridge_type);
@@ -282,7 +283,7 @@ static bool crt_load_file(FIL *crt_file, u16 cartridge_type)
         {
             wrn("Unsupported CRT chip bank %u at $%x. Size %u",
                 header.bank, header.start_address, header.image_size);
-            return false;
+            return 0;
         }
 
         if (header.bank >= 64)
@@ -292,12 +293,17 @@ static bool crt_load_file(FIL *crt_file, u16 cartridge_type)
             continue;   // Skip image
         }
 
+        if (banks_in_use < (header.bank + 1))
+        {
+            banks_in_use = header.bank + 1;
+        }
+
         u8 *read_buf = crt_buf + offset;
         if (file_read(crt_file, read_buf, header.image_size) != header.image_size)
         {
             err("Failed to read CRT chip image. Bank %u at $%x",
                 header.bank, header.start_address);
-            return false;
+            return 0;
         }
 
         // Mirror 4k image
@@ -307,7 +313,7 @@ static bool crt_load_file(FIL *crt_file, u16 cartridge_type)
         }
     }
 
-    return true;
+    return banks_in_use;
 }
 
 static void crt_install_eapi(u16 cartridge_type)
@@ -333,27 +339,35 @@ static bool crt_write_chip(FIL *file, u8 bank, u16 address, u16 size, void *buf)
     return file_write(file, buf, size) == size;
 }
 
-static bool crt_write_file(FIL *crt_file)
+static u8 crt_write_file(FIL *crt_file)
 {
+    u8 banks_in_use = 0;
+
     const u16 chip_size = 8*1024;
     for (u8 bank=0; bank<64; bank++)
     {
         u8 *buf = crt_banks[bank];
 
-        if (!crt_bank_empty(buf, chip_size) &&
-            !crt_write_chip(crt_file, bank, 0x8000, chip_size, buf))
+        if (!crt_bank_empty(buf, chip_size))
         {
-            return false;
+            if (!crt_write_chip(crt_file, bank, 0x8000, chip_size, buf))
+            {
+                return 0;
+            }
+            banks_in_use = bank + 1;
         }
 
-        if ((!bank || !crt_bank_empty(buf + chip_size, chip_size)) &&
-            !crt_write_chip(crt_file, bank, 0xa000, chip_size, buf + chip_size))
+        if (!bank || !crt_bank_empty(buf + chip_size, chip_size))
         {
-            return false;
+            if (!crt_write_chip(crt_file, bank, 0xa000, chip_size, buf + chip_size))
+            {
+                return 0;
+            }
+            banks_in_use = bank + 1;
         }
     }
 
-    return true;
+    return banks_in_use;
 }
 
 static bool upd_load(FIL *file, char *firmware_name)
@@ -682,6 +696,7 @@ static bool load_crt(void)
         return false;
     }
 
+    u8 banks;
     if (cfg_file.crt.flags & CRT_FLAG_ROM)
     {
         u16 len = rom_load_file(&file);
@@ -689,6 +704,7 @@ static bool load_crt(void)
         {
             return false;
         }
+        banks = ((len - 1) / 16*1024) + 1;
 
         if (cfg_file.crt.game == 0 && cfg_file.crt.exrom == 1)
         {
@@ -701,7 +717,7 @@ static bool load_crt(void)
         CRT_HEADER header;
         if (!crt_load_header(&file, &header) ||
             !crt_is_supported(header.cartridge_type) ||
-            !crt_load_file(&file, header.cartridge_type))
+            !(banks = crt_load_file(&file, header.cartridge_type)))
         {
             return false;
         }
@@ -709,7 +725,7 @@ static bool load_crt(void)
         crt_install_eapi(header.cartridge_type);
     }
 
-    crt_buf_valid();
+    crt_buf_valid(banks);
     return true;
 }
 

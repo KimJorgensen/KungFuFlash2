@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 Kim Jørgensen
+ * Copyright (c) 2019-2025 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -26,6 +26,7 @@
 typedef struct
 {
     u32 signature[sizeof(CRT_BUF_SIGNATURE)/4]; // CRT_BUF_SIGNATURE
+    u8 banks;       // Number of 16k CRT banks in use (0-64)
     u32 updated;    // EasyFlash CRT image has been updated via EAPI
 } CRT_BUF_HEADER;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 Kim Jørgensen
+ * Copyright (c) 2019-2025 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -249,16 +249,17 @@ static void sd_handle_save_updated_crt(u8 flags)
         }
     }
 
+    u8 banks = 0;
     FIL file;
     if (!file_open(&file, cfg_file.file, FA_WRITE|FA_CREATE_ALWAYS) ||
         !crt_write_header(&file, CRT_EASYFLASH, 1, 0, "EASYFLASH") ||
-        !crt_write_file(&file))
+        !(banks = crt_write_file(&file)))
     {
         sd_send_warning_restart("Failed to write CRT file", cfg_file.file);
     }
     file_close(&file);
 
-    crt_buf_valid();
+    crt_buf_valid(banks);
     save_cfg();
     restart_to_menu();
 }
@@ -591,7 +592,8 @@ static u8 sd_handle_load(SD_STATE *state, const char *file_name, u8 file_type,
                 return handle_unsupported(file_name);
             }
 
-            crt_buf_valid();
+            u8 banks = ((len - 1) / 16*1024) + 1;
+            crt_buf_valid(banks);
             cfg_file.crt.hw_rev = 0;
             cfg_file.crt.flags = CRT_FLAG_VIC | CRT_FLAG_ROM;
             cfg_file.boot_type = CFG_CRT;
@@ -624,13 +626,14 @@ static u8 sd_handle_load(SD_STATE *state, const char *file_name, u8 file_type,
             sd_send_prg_message("Loading CRT file.");
             crt_buf_invalidate();
 
-            if (!crt_load_file(&file, header.cartridge_type))
+            u8 banks = crt_load_file(&file, header.cartridge_type);
+            if (!banks)
             {
                 sd_send_warning_restart("Failed to read CRT file", file_name);
             }
             crt_install_eapi(header.cartridge_type);
 
-            crt_buf_valid();
+            crt_buf_valid(banks);
             u8 crt_flags = flags & SELECT_FLAG_VIC ? CRT_FLAG_VIC : CRT_FLAG_NONE;
             cfg_file.crt.type = header.cartridge_type;
             cfg_file.crt.hw_rev = header.hardware_revision;

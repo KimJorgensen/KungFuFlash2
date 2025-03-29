@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 Kim Jørgensen
+ * Copyright (c) 2019-2025 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -98,7 +98,7 @@ static void fm_init(CFG_CRT_HEADER *crt_header)
     io1_state = STATUS_LED_OFF|CRT_PORT_NONE;
 
     // Toggle ROM A14 on reset if 32 kb cartridge
-    if (RESET_TOOGLE == 1 && !crt_bank_empty(crt_banks[1], 16*1024))
+    if (RESET_TOOGLE == 1 && crt_buf_header.banks > 1)
     {
         RESET_TOOGLE = 0;
         crt_ptr = crt_banks[1];
