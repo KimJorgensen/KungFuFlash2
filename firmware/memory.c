@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 Kim Jørgensen
+ * Copyright (c) 2019-2025 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -42,11 +42,12 @@ static inline void invalidate_menu_signature(void)
 /******************************************************************************
 * CRT image buffer
 ******************************************************************************/
-static void crt_buf_valid(void)
+static void crt_buf_valid(u8 banks)
 {
     memcpy(crt_buf_header.signature, CRT_BUF_SIGNATURE,
            sizeof(CRT_BUF_SIGNATURE));
 
+    crt_buf_header.banks = banks;
     crt_buf_header.updated = false;
 }
 
