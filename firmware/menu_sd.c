@@ -682,6 +682,13 @@ static u8 sd_handle_load(SD_STATE *state, const char *file_name, u8 file_type,
         }
         break;
 
+        case FILE_SID:
+        {
+            cfg_file.boot_type = CFG_SID;
+            return CMD_WAIT_SYNC;
+        }
+        break;
+
         case FILE_TXT:
         {
             cfg_file.boot_type = CFG_TXT;

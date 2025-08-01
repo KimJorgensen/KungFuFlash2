@@ -828,6 +828,78 @@ static void start_text_reader(void)
                          sizeof(KFF_BUF) - (DIR_NAME_LENGTH+3));
 }
 
+typedef struct
+{
+    u16 load_addr;
+    u16 init_addr;
+    u16 play_addr;
+    u16 songs;
+    u16 start_song;
+    u16 size;
+} SID_INFO;
+
+static SID_INFO sid_info;
+
+static bool load_sid(void)
+{
+    if (!cfg_file.file[0] || !chdir_last())
+    {
+        return false;
+    }
+
+    FIL file;
+    if (!file_open(&file, cfg_file.file, FA_READ))
+    {
+        return false;
+    }
+
+    SID_HEADER header;
+    if (file_read(&file, &header, sizeof(SID_HEADER)) != sizeof(SID_HEADER))
+    {
+        return false;
+    }
+
+    if (memcmp(header.magic, "PSID", 4) != 0 &&
+        memcmp(header.magic, "RSID", 4) != 0)
+    {
+        wrn("Unsupported SID header");
+        return false;
+    }
+
+    u16 data_offset = __builtin_bswap16(header.data_offset);
+    sid_info.load_addr = __builtin_bswap16(header.load_address);
+    sid_info.init_addr = __builtin_bswap16(header.init_address);
+    sid_info.play_addr = __builtin_bswap16(header.play_address);
+    sid_info.songs = __builtin_bswap16(header.songs);
+    sid_info.start_song = __builtin_bswap16(header.start_song);
+
+    if (!file_seek(&file, data_offset))
+    {
+        return false;
+    }
+
+    sid_info.size = file_read(&file, dat_buf, sizeof(dat_buf));
+    if (!sid_info.size)
+    {
+        return false;
+    }
+
+    if (sid_info.load_addr == 0 && sid_info.size > 2)
+    {
+        sid_info.load_addr = dat_buf[0] | (dat_buf[1] << 8);
+        memmove(dat_buf, dat_buf + 2, sid_info.size - 2);
+        sid_info.size -= 2;
+    }
+
+    return true;
+}
+
+static void start_sid_player(void)
+{
+    (void)sid_info;
+    c64_send_warning("SID playback not implemented.");
+}
+
 static void c64_launcher_mode(void)
 {
     crt_ptr = CRT_LAUNCHER;
@@ -938,6 +1010,18 @@ static bool c64_set_mode(void)
             }
             c64_enable();
 
+            result = true;
+        }
+        break;
+
+        case CFG_SID:
+        {
+            if (!load_sid())
+            {
+                break;
+            }
+
+            start_sid_player();
             result = true;
         }
         break;

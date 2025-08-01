@@ -245,8 +245,16 @@ static u8 handle_file_options(const char *file_name, u8 file_type, u8 element_no
             delete_option = false;
             // fall through
         case FILE_T64:
+        case FILE_SID:
         case FILE_TXT:
-            select_text = "Open";
+            if (file_type == FILE_SID)
+            {
+                select_text = "Play";
+            }
+            else
+            {
+                select_text = "Open";
+            }
             break;
 
         default:
