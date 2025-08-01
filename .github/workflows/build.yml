@@ -1,0 +1,43 @@
+name: KungFuFlash2 Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - dev
+  pull_request:
+    branches:
+      - main
+      - master
+      - dev
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Set up ARM toolchain
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-arm-none-eabi
+
+      - name: Install cc65
+        run: |
+          sudo apt install -y cc65
+
+      - name: Build Firmware
+        run: |
+          cd firmware
+          make
+
+      - name: Verify build success
+        run: |
+          if ! ls firmware/build/*.bin 1>/dev/null 2>&1; then
+            echo "Build failed: No .bin file found in the firmware/build/ folder!"
+            exit 1
+          fi
+          echo "Build successful!"
+
