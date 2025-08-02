@@ -497,6 +497,79 @@ static void sd_file_open(FIL *file, const char *file_name)
     }
 }
 
+static bool sd_sid_to_prg(const char *sid_name)
+{
+    FIL sid_file;
+    if (!file_open(&sid_file, sid_name, FA_READ))
+    {
+        return false;
+    }
+
+    SID_HEADER header;
+    if (file_read(&sid_file, &header, sizeof(SID_HEADER)) != sizeof(SID_HEADER))
+    {
+        file_close(&sid_file);
+        return false;
+    }
+
+    if (memcmp(header.magic, "PSID", 4) != 0 &&
+        memcmp(header.magic, "RSID", 4) != 0)
+    {
+        file_close(&sid_file);
+        return false;
+    }
+
+    u16 version = __builtin_bswap16(header.version);
+    if (version < 1 || version > 3)
+    {
+        file_close(&sid_file);
+        return false;
+    }
+
+    u16 data_offset = __builtin_bswap16(header.data_offset);
+    if (!file_seek(&sid_file, data_offset))
+    {
+        file_close(&sid_file);
+        return false;
+    }
+
+    u32 size = file_read(&sid_file, dat_buf, sizeof(dat_buf));
+    file_close(&sid_file);
+    if (!size)
+    {
+        return false;
+    }
+
+    char prg_name[sizeof(cfg_file.file)];
+    strncpy(prg_name, sid_name, sizeof(prg_name));
+    prg_name[sizeof(prg_name)-1] = 0;
+
+    u8 extension;
+    u8 length = get_filename_length(prg_name, &extension);
+    if (length - extension >= 4)
+    {
+        strcpy(prg_name + extension, ".prg");
+    }
+    else if (length + 4 < sizeof(prg_name))
+    {
+        strcpy(prg_name + length, ".prg");
+    }
+    else
+    {
+        return false;
+    }
+
+    FIL prg_file;
+    if (!file_open(&prg_file, prg_name, FA_WRITE | FA_CREATE_ALWAYS))
+    {
+        return false;
+    }
+
+    bool ok = file_write(&prg_file, dat_buf, size) == size;
+    file_close(&prg_file);
+    return ok;
+}
+
 static u8 sd_handle_crt_unsupported(u32 cartridge_type)
 {
     sprint(scratch_buf, "Unsupported %s CRT type (%u)",
@@ -684,6 +757,17 @@ static u8 sd_handle_load(SD_STATE *state, const char *file_name, u8 file_type,
 
         case FILE_SID:
         {
+            if (flags & SELECT_FLAG_CONVERT)
+            {
+                sd_send_prg_message("Converting to PRG.");
+                if (!sd_sid_to_prg(file_name))
+                {
+                    sd_send_warning_restart("Failed to convert file", file_name);
+                }
+                c64_interface_sync();
+                return CMD_MENU;
+            }
+
             cfg_file.boot_type = CFG_SID;
             return CMD_WAIT_SYNC;
         }

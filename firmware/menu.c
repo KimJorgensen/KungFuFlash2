@@ -264,6 +264,10 @@ static u8 handle_file_options(const char *file_name, u8 file_type, u8 element_no
 
     OPTIONS_STATE *options = build_options(title, file_name);
     options_add_select(options, select_text, SELECT_FLAG_ACCEPT, element_no);
+    if (file_type == FILE_SID)
+    {
+        options_add_select(options, "Convert to PRG", SELECT_FLAG_CONVERT, element_no);
+    }
     if (vic_text)
     {
         options_add_select(options, vic_text, SELECT_FLAG_VIC, element_no);
