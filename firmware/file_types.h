@@ -208,7 +208,6 @@ typedef enum
     CFG_PRG,
     CFG_USB,
     CFG_DISK,
-    CFG_SID,
     CFG_TXT,
     CFG_BASIC,
     CFG_KILL,
