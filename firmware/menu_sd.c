@@ -497,6 +497,154 @@ static void sd_file_open(FIL *file, const char *file_name)
     }
 }
 
+static const u8 sid_stub_template[] =
+{
+    0x0b, 0x08, 0x01, 0x00, 0x9e, '2', '0', '6', '1', 0x00,
+    0x00, 0x00, 0x78, 0xa9, 0x38, 0xa2, 0x08, 0x8d, 0x14, 0x03,
+    0x8e, 0x15, 0x03, 0xa9, 0x1b, 0xa2, 0x00, 0xa0, 0x7f, 0x8d,
+    0x11, 0xd0, 0x8e, 0x12, 0xd0, 0x8c, 0x0d, 0xdc, 0xa9, 0x01,
+    0x8d, 0x1a, 0xd0, 0x8d, 0x19, 0xd0, 0xa9, 0x00, 0x20, 0x00,
+    0x10, 0x58, 0x4c, 0x35, 0x08, 0xa9, 0x01, 0x8d, 0x19, 0xd0,
+    0x20, 0x03, 0x10, 0x4c, 0x31, 0xea
+};
+
+static void sid_build_stub(u8 *stub, u16 init_addr, u16 play_addr)
+{
+    memcpy(stub, sid_stub_template, sizeof(sid_stub_template));
+    stub[49] = init_addr & 0xff;
+    stub[50] = init_addr >> 8;
+    stub[61] = play_addr & 0xff;
+    stub[62] = play_addr >> 8;
+}
+
+static bool sd_sid_to_prg(const char *sid_name, char *prg_name_out)
+{
+    FIL sid_file;
+    if (!file_open(&sid_file, sid_name, FA_READ))
+    {
+        return false;
+    }
+
+    SID_HEADER header;
+    if (file_read(&sid_file, &header, sizeof(SID_HEADER)) != sizeof(SID_HEADER))
+    {
+        file_close(&sid_file);
+        return false;
+    }
+
+    if (memcmp(header.magic, "PSID", 4) != 0 &&
+        memcmp(header.magic, "RSID", 4) != 0)
+    {
+        file_close(&sid_file);
+        return false;
+    }
+
+    u16 version = __builtin_bswap16(header.version);
+    if (version < 1 || version > 3)
+    {
+        file_close(&sid_file);
+        return false;
+    }
+
+    u16 data_offset = __builtin_bswap16(header.data_offset);
+    if (!file_seek(&sid_file, data_offset))
+    {
+        file_close(&sid_file);
+        return false;
+    }
+
+    u32 sid_size = file_read(&sid_file, dat_buf, sizeof(dat_buf));
+    file_close(&sid_file);
+    if (!sid_size)
+    {
+        return false;
+    }
+
+    u16 load_addr = __builtin_bswap16(header.load_address);
+    u8 *sid_code = dat_buf;
+    if (load_addr == 0)
+    {
+        if (sid_size < 2)
+        {
+            return false;
+        }
+
+        load_addr = sid_code[0] | (sid_code[1] << 8);
+        sid_code += 2;
+        sid_size -= 2;
+    }
+
+    char prg_name[sizeof(cfg_file.file)];
+    strncpy(prg_name, sid_name, sizeof(prg_name));
+    prg_name[sizeof(prg_name)-1] = 0;
+
+    u8 extension;
+    u8 length = get_filename_length(prg_name, &extension);
+    if (length - extension >= 4)
+    {
+        strcpy(prg_name + extension, ".prg");
+    }
+    else if (length + 4 < sizeof(prg_name))
+    {
+        strcpy(prg_name + length, ".prg");
+    }
+    else
+    {
+        return false;
+    }
+
+    FIL prg_file;
+    if (!file_open(&prg_file, prg_name, FA_WRITE | FA_CREATE_ALWAYS))
+    {
+        return false;
+    }
+
+    u16 init_addr = __builtin_bswap16(header.init_address);
+    u16 play_addr = __builtin_bswap16(header.play_address);
+    u8 stub[sizeof(sid_stub_template)];
+    sid_build_stub(stub, init_addr, play_addr);
+
+    const u16 prg_load = 0x0801;
+    if (load_addr < prg_load + sizeof(stub))
+    {
+        file_close(&prg_file);
+        return false;
+    }
+
+    u32 pad = load_addr - prg_load - sizeof(stub);
+
+    u8 load_header[2] = { prg_load & 0xff, prg_load >> 8 };
+    if (file_write(&prg_file, load_header, sizeof(load_header)) != sizeof(load_header) ||
+        file_write(&prg_file, stub, sizeof(stub)) != sizeof(stub))
+    {
+        file_close(&prg_file);
+        return false;
+    }
+
+    u8 zero_buf[32] = {0};
+    while (pad)
+    {
+        u32 chunk = pad > sizeof(zero_buf) ? sizeof(zero_buf) : pad;
+        if (file_write(&prg_file, zero_buf, chunk) != chunk)
+        {
+            file_close(&prg_file);
+            return false;
+        }
+        pad -= chunk;
+    }
+
+    bool ok = file_write(&prg_file, sid_code, sid_size) == sid_size;
+    file_close(&prg_file);
+
+    if (ok && prg_name_out)
+    {
+        strncpy(prg_name_out, prg_name, sizeof(cfg_file.file));
+        prg_name_out[sizeof(cfg_file.file)-1] = 0;
+    }
+
+    return ok;
+}
+
 static u8 sd_handle_crt_unsupported(u32 cartridge_type)
 {
     sprint(scratch_buf, "Unsupported %s CRT type (%u)",
@@ -679,6 +827,29 @@ static u8 sd_handle_load(SD_STATE *state, const char *file_name, u8 file_type,
             cfg_file.img.element = 0;
             menu = t64_menu_init(file_name);
             return menu->dir(menu->state);
+        }
+        break;
+
+        case FILE_SID:
+        {
+            sd_send_prg_message("Converting to PRG.");
+            if (!sd_sid_to_prg(file_name,
+                               (flags & SELECT_FLAG_CONVERT) ? NULL : cfg_file.file))
+            {
+                sd_send_warning_restart("Failed to convert file", file_name);
+                c64_interface_sync();
+                return CMD_MENU;
+            }
+
+            c64_interface_sync();
+            if (flags & SELECT_FLAG_CONVERT)
+            {
+                return CMD_MENU;
+            }
+
+            cfg_file.img.mode = PRG_MODE_PRG;
+            cfg_file.boot_type = CFG_PRG;
+            return CMD_WAIT_SYNC;
         }
         break;
 
