@@ -40,8 +40,8 @@ R12,100R,R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,120.752,-115.427,90.0,top
 R13,100R,R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,118.72,-115.427,90.0,top
 R14,100R,R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,116.688,-115.427,90.0,top
 R15,100R,R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,114.656,-115.427,90.0,top
-R16,10k,R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,131.699,-80.01,180.0,top
-R17,10k,R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,131.826,-92.837,180.0,top
+R16,5.1k,R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,131.699,-80.01,180.0,top
+R17,5.1k,R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,131.826,-92.837,180.0,top
 SW1,Reset,SW_PUSH_6mm_H8mm,126.925,-72.608,0.0,top
 SW2,Menu,SW_PUSH_6mm_H8mm,115.5815,-72.6165,0.0,top
 SW3,Special,SW_PUSH_6mm_H8mm,82.856,-72.6165,0.0,top
