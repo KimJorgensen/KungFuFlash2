@@ -41,3 +41,12 @@ jobs:
           fi
           echo "Build successful!"
 
+      - name: Upload firmware artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-build
+          path: |
+            firmware/build/*.bin
+            firmware/build/*.upd
+
