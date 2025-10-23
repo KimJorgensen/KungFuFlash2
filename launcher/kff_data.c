@@ -18,6 +18,7 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+#include "ui_colors.h"
 #include "kff_data.h"
 #include "screen.h"
 
@@ -39,18 +40,18 @@ static void progress(void)
             for (i=0; i<SCREENW; i++)
             {
                 SCREEN_RAM[i] |= 0x80;
-                COLOR_RAM[i] = SEARCHC;
+                COLOR_RAM[i] = SEARCHC;  //GRAY2
             }
 
             xpos = 0;
-            color = BACKC;
+            color = USER_COLOR1;
             return;
         }
 
         if (xpos >= SCREENW)
         {
             xpos = 0;
-            color = color == BACKC ? SEARCHC : BACKC;
+            color = color == USER_COLOR1 ? USER_COLOR1 : USER_COLOR1;
         }
 
         COLOR_RAM[xpos] = color;
@@ -66,7 +67,7 @@ static void end_progress(void)
     {
         for (i=0; i<SCREENW; i++)
         {
-            COLOR_RAM[i] = BACKC;
+            COLOR_RAM[i] = USER_COLOR1;
         }
     }
 }
