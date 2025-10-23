@@ -19,7 +19,7 @@
  */
 
 #define CFG_FILENAME "/.KFF2.cfg"
-
+#define UI_COLOR_TAIL_BYTES 5  /* bytes at the end of dir->name reserved for color IDs */
 #define CRT_C64_SIGNATURE  "C64 CARTRIDGE   "
 #define CRT_C128_SIGNATURE "C128 CARTRIDGE  "
 #define CRT_CHIP_SIGNATURE "CHIP"
@@ -28,6 +28,7 @@
 
 #define EAPI_OFFSET 0x3800
 #define EAPI_SIZE   0x300
+
 
 static u16 prg_load_file(FIL *file)
 {
@@ -412,23 +413,72 @@ static bool mount_sd_card(void)
     return dir_change("/");
 }
 
+
 static bool load_cfg(void)
 {
-    bool result = true;
+    bool ok = true;
     FIL file;
-    if (!file_open(&file, CFG_FILENAME, FA_READ) ||
-        file_read(&file, &cfg_file, sizeof(cfg_file)) != sizeof(cfg_file) ||
-        memcmp(CFG_SIGNATURE, cfg_file.signature, sizeof(cfg_file.signature)) != 0)
-    {
-        wrn("%s file not found or invalid", CFG_FILENAME);
-        memset(&cfg_file, 0, sizeof(cfg_file));
-        memcpy(cfg_file.signature, CFG_SIGNATURE, sizeof(cfg_file.signature));
-        result = false;
+    FILINFO info;
+
+    /* Start clean + signature + DEFAULTS for new fields */
+    memset(&cfg_file, 0, sizeof(cfg_file));
+    memcpy(cfg_file.signature, CFG_SIGNATURE, sizeof(cfg_file.signature));
+
+    /* Defaults for first boot / older cfgs (IDs, not conio colors) */
+    cfg_file.ui_color1_id = UI_COL_WHITE;
+    cfg_file.ui_color2_id = UI_COL_WHITE;
+    cfg_file.ui_color3_id = UI_COL_PURPLE;
+	cfg_file.ui_color4_id = UI_COL_BLACK;
+	cfg_file.ui_color5_id = UI_COL_BLACK;
+
+    /* If no file, keep defaults */
+    if (!file_stat(CFG_FILENAME, &info) || !file_open(&file, CFG_FILENAME, FA_READ)) {
+        wrn("%s file not found", CFG_FILENAME);
+        return false;
     }
 
+    /* Read at most what's present in the file (older cfgs are shorter) */
+    UINT want = (UINT)info.fsize;
+    if (want > sizeof(cfg_file)) want = (UINT)sizeof(cfg_file);
+
+    UINT got = file_read(&file, &cfg_file, want);
     file_close(&file);
-    return result;
+    if (got != want) {
+        wrn("Failed to read %s", CFG_FILENAME);
+        return false;
+    }
+
+    /* Validate signature */
+    if (memcmp(CFG_SIGNATURE, cfg_file.signature, sizeof(cfg_file.signature)) != 0) {
+        wrn("%s invalid signature", CFG_FILENAME);
+        memset(&cfg_file, 0, sizeof(cfg_file));
+        memcpy(cfg_file.signature, CFG_SIGNATURE, sizeof(cfg_file.signature));
+        cfg_file.ui_color1_id = UI_COL_WHITE;
+        cfg_file.ui_color2_id = UI_COL_WHITE;
+        cfg_file.ui_color3_id = UI_COL_PURPLE;
+		cfg_file.ui_color4_id = UI_COL_BLACK;
+		cfg_file.ui_color5_id = UI_COL_BLACK;
+        ok = false;
+    }
+
+    /* Clamp invalid IDs (in case of very old/garbage values) */
+    if (cfg_file.ui_color1_id >= UI_COL_MAX) cfg_file.ui_color1_id = UI_COL_WHITE;
+    if (cfg_file.ui_color2_id >= UI_COL_MAX) cfg_file.ui_color2_id = UI_COL_WHITE;
+    if (cfg_file.ui_color3_id >= UI_COL_MAX) cfg_file.ui_color3_id = UI_COL_PURPLE;
+    if (cfg_file.ui_color4_id >= UI_COL_MAX) cfg_file.ui_color4_id = UI_COL_BLACK;
+    if (cfg_file.ui_color5_id >= UI_COL_MAX) cfg_file.ui_color5_id = UI_COL_BLACK;
+
+   /* --- Safety correction --- */
+    /* If both Color2 and Color3 equal Color4, restore to readable defaults */
+    if (cfg_file.ui_color2_id == cfg_file.ui_color4_id && cfg_file.ui_color3_id == cfg_file.ui_color4_id) {
+        cfg_file.ui_color2_id = UI_COL_WHITE;
+        cfg_file.ui_color3_id = UI_COL_PURPLE;
+
+    }
+
+    return ok;
 }
+
 
 static bool auto_boot(void)
 {
