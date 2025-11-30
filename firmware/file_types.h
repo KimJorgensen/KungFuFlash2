@@ -149,6 +149,22 @@ typedef struct
     char filename[17];
     u8 rel_record_size;
 } P00_HEADER;
+
+typedef struct
+{
+    char magic[4];
+    u16 version;
+    u16 data_offset;
+    u16 load_address;
+    u16 init_address;
+    u16 play_address;
+    u16 songs;
+    u16 start_song;
+    u32 speed;
+    char name[32];
+    char author[32];
+    char released[32];
+} SID_HEADER;
 #pragma pack(pop)
 
 typedef enum
@@ -163,6 +179,7 @@ typedef enum
     FILE_D64_PRG,
     FILE_T64,
     FILE_T64_PRG,
+    FILE_SID,
     FILE_ROM,
     FILE_TXT,
 
