@@ -856,6 +856,7 @@ static void c64_reu_mode(void)
 
 static void c64_ef3_mode(void)
 {
+    crt_ptr = CRT_LAUNCHER;
     ef_init();
     C64_INSTALL_HANDLER(ef3_handler);
 }
