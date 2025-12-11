@@ -237,23 +237,54 @@ typedef struct
     u16 element;        // Used if file is a T64 or D64
 } CFG_IMG_HEADER;
 
+
+// echto
+typedef enum {
+    UI_COL_BLACK = 0,
+    UI_COL_WHITE,
+    UI_COL_RED,
+    UI_COL_CYAN,
+    UI_COL_PURPLE,
+    UI_COL_GREEN,
+    UI_COL_BLUE,
+    UI_COL_YELLOW,
+    UI_COL_ORANGE,
+    UI_COL_BROWN,
+    UI_COL_LIGHTRED,
+    UI_COL_GRAY1,       /* dark gray */
+    UI_COL_GRAY2,       /* medium gray (your SEARCHC uses COLOR_GRAY2) */
+    UI_COL_LIGHTGREEN,
+    UI_COL_LIGHTBLUE,
+    UI_COL_GRAY3,       /* light gray */
+    UI_COL_MAX          /* = 16 */
+} UI_COLOR_ID;
+
+
 typedef struct
 {
-    u8 signature[5];    // CFG_SIGNATURE
-    s8 phi2_offset;
-    u8 flags;           // CFG_FLAGS
+    u8  signature[5];   // CFG_SIGNATURE
+    s8  phi2_offset;
+    u8  flags;          // CFG_FLAGS
     u32 reserved;       // Should be 0
-    u8 boot_type;       // CFG_BOOT_TYPE
+    u8  boot_type;      // CFG_BOOT_TYPE
 
-    union
-    {
+    union {
         CFG_CRT_HEADER crt; // boot_type is CFG_CRT
         CFG_IMG_HEADER img; // boot_type is CFG_PRG or CFG_DISK
     };
 
     char path[750];
     char file[256];
+
+    /* --- NEW: UI color IDs (persisted) --- */
+    u8 ui_color1_id;    // header/frame
+    u8 ui_color2_id;    // normal text
+    u8 ui_color3_id;    // alt text
+    u8 ui_color4_id;	// background
+    u8 ui_color5_id;    // border
 } CFG_FILE;
+
+
 #pragma pack(pop)
 
 #define CFG_SIGNATURE "KFF2\1"

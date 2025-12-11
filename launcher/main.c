@@ -39,6 +39,7 @@
 #include <cbm.h>
 #include <errno.h>
 #include <joystick.h>
+#include "ui_colors.h"
 #include "screen.h"
 #include "dir.h"
 #include "base.h"
@@ -69,6 +70,79 @@ static void showMessage(const char *text, uint8_t color);
 /* definitions */
 #define EF3_USB_CMD_LEN 12
 
+#define UI_COLOR_TAIL_BYTES 5  /* bytes at the end of dir->name reserved for color IDs */
+
+/* define globals declared in header */
+unsigned char g_color1_id = UI_COL_WHITE;
+unsigned char g_color2_id = UI_COL_WHITE;
+unsigned char g_color3_id = UI_COL_PURPLE;
+unsigned char g_color4_id = UI_COL_BLACK;
+unsigned char g_color5_id = UI_COL_BLACK;
+
+unsigned char ui_color_to_conio(unsigned char id) {
+    static const unsigned char map[UI_COL_MAX] = {
+        COLOR_BLACK,       // 0
+        COLOR_WHITE,       // 1
+        COLOR_RED,         // 2
+        COLOR_CYAN,        // 3
+        COLOR_PURPLE,      // 4
+        COLOR_GREEN,       // 5
+        COLOR_BLUE,        // 6
+        COLOR_YELLOW,      // 7
+        COLOR_ORANGE,      // 8
+        COLOR_BROWN,       // 9
+        COLOR_LIGHTRED,    // 10
+        COLOR_GRAY1,	   // 11  
+        COLOR_GRAY2,       // 12
+        COLOR_LIGHTGREEN,  // 13
+        COLOR_LIGHTBLUE,   // 14
+        COLOR_GRAY3        // 15
+    };
+    return (id < UI_COL_MAX) ? map[id] : COLOR_CYAN;
+}
+
+
+/* Build a printable title string from a Directory, stripping color tail */
+static void build_dir_title(const Directory *d, char *out, size_t outsz)
+{
+    /* d->name layout:
+       [0] = flag (NORMAL_DIR / SEARCH_SUPPORTED / CLEAR_SEARCH)
+       [1 .. DIR_NAME_LENGTH-UI_COLOR_TAIL_BYTES-1] = visible chars (padded)
+       [DIR_NAME_LENGTH-UI_COLOR_TAIL_BYTES .. DIR_NAME_LENGTH-1] = color IDs
+    */
+    size_t visible_len = (DIR_NAME_LENGTH - UI_COLOR_TAIL_BYTES) - 1; /* skip flag at [0] */
+    size_t n = visible_len;
+    if (outsz == 0) return;
+    if (n >= outsz) n = outsz - 1;
+
+    memcpy(out, d->name + 1, n);
+    out[n] = 0;
+
+    /* trim trailing spaces */
+    while (n && out[n-1] == ' ') {
+        out[--n] = 0;
+    }
+}
+
+
+/* pull IDs out of the dir-name tail that firmware filled */
+static void ui_sync_from_dirname_tail(const Directory *d) {
+    const unsigned char *name = (const unsigned char *)d->name;
+
+    unsigned char c1 = name[DIR_NAME_LENGTH - 5];
+    unsigned char c2 = name[DIR_NAME_LENGTH - 4];
+    unsigned char c3 = name[DIR_NAME_LENGTH - 3];
+	unsigned char c4 = name[DIR_NAME_LENGTH - 2];
+	unsigned char c5 = name[DIR_NAME_LENGTH - 1];
+
+    if (c1 < UI_COL_MAX) g_color1_id = c1;
+    if (c2 < UI_COL_MAX) g_color2_id = c2;
+    if (c3 < UI_COL_MAX) g_color3_id = c3;
+    if (c4 < UI_COL_MAX) g_color4_id = c4;
+    if (c5 < UI_COL_MAX) g_color5_id = c5;
+}
+
+
 static bool isC128 = false;
 
 static char linebuffer[SCREENW+1];
@@ -93,8 +167,7 @@ static const char menuBar[] =    {"          " KUNG_FU_FLASH_VER "  <F1> Help"};
 int main(void)
 {
     uint8_t i, tmp, tst;
-    initScreen(COLOR_BLACK, COLOR_BLACK, TEXTC);
-
+    initScreen(COLOR_BLACK, COLOR_BLACK, USER_COLOR2);
     dir = (Directory *)malloc(sizeof(Directory));
     bigBuffer = (uint8_t *)dir;
     pageBuffer = (uint16_t *)dir;
@@ -282,7 +355,8 @@ static void showTextPage(uint16_t page)
 
     clrscr();
     revers(1);
-    textcolor(BACKC);
+
+    textcolor(USER_COLOR1);
     gotoxy(0, 0);
     KFF_READ_PTR = 0;
     for (i=0; i<DIR_NAME_LENGTH; i++)
@@ -292,7 +366,8 @@ static void showTextPage(uint16_t page)
     cputc(' ');
     cputsxy(0, BOTTOM, programBar);
     revers(0);
-    textcolor(TEXTC);
+
+    textcolor(USER_COLOR1);
     gotoxy(0, 1);
 
     KFF_READ_PTR = pageBuffer[page];
@@ -387,7 +462,7 @@ static void updateScreen(void)
 {
     clrscr();
     revers(0);
-    textcolor(BACKC);
+    textcolor(USER_COLOR1);
     drawFrame();
     revers(1);
     cputsxy(0, BOTTOM, menuBar);
@@ -396,17 +471,46 @@ static void updateScreen(void)
     showDir();
 }
 
+
 static uint8_t menuLoop(void)
 {
     uint8_t c, last_selected = 0;
     uint8_t data, cmd, reply;
 
     memset(dir, 0, sizeof(Directory));
+
+    // Send current search buffer first (as before)
+    kff_send_size_data(searchBuffer, searchLen);
+
+    // ---- PREFETCH ONE DIR PAGE TO SYNC COLORS BEFORE DRAWING ----
+    // Ask firmware for a directory page
+    cmd = kff_send_reply_progress(REPLY_DIR);
+
+    // Handle only the very first response here, enough to sync colors
+    if (cmd == CMD_READ_DIR) {
+        readDir(dir);                       // fills dir->name[0..38]
+        ui_sync_from_dirname_tail(dir);     // <-- get g_color*_id from name tail
+    } else if (cmd == CMD_READ_DIR_PAGE) {
+        // very unlikely on first request, but still safe:
+        if (!readDirPage(dir)) {
+            dir->selected = last_selected;
+        }
+        ui_sync_from_dirname_tail(dir);
+    } else {
+        // If firmware sent something else, just proceed (colors stay defaults)
+    }
+
+    // Now that colors are known, draw UI for the first time
     updateScreen();
+	bgcolor(USER_COLOR4);
+    bordercolor(USER_COLOR5);
+    showDir();
+    waitRelease();
 
     cmd = CMD_NONE;
-    kff_send_size_data(searchBuffer, searchLen);
-    reply = REPLY_DIR;
+    reply = REPLY_OK;
+
+
 
     while (true)
     {
@@ -423,6 +527,9 @@ static uint8_t menuLoop(void)
 
             case CMD_READ_DIR:
                 readDir(dir);
+
+				ui_sync_from_dirname_tail(dir);   
+
                 showDir();
                 waitRelease();
                 continue;
@@ -443,6 +550,8 @@ static uint8_t menuLoop(void)
                 {
                     dir->selected = dir->text_elements;
                 }
+
+				ui_sync_from_dirname_tail(dir);
 
                 showDir();
                 continue;
@@ -649,7 +758,7 @@ static uint8_t search(uint8_t c)
     printElement(last_selected);
     dir->selected = last_selected;
 
-    textcolor(TEXTC);
+    textcolor(USER_COLOR1);
     revers(1);
     memcpy(inputBuffer, searchBuffer, searchLen);
 
@@ -846,10 +955,13 @@ static void showDir(void)
     }
     else
     {
-        sprintf(linebuffer, " %-38s ", dir->name+1);
+        char title[DIR_NAME_LENGTH];
+        build_dir_title(dir, title, sizeof(title));   // <-- pass dir here
+        sprintf(linebuffer, " %-38s ", title);
     }
 
-    textcolor(BACKC);
+
+    textcolor(USER_COLOR1);
     revers(1);
     cputsxy(0, 0, linebuffer);
 
@@ -868,10 +980,28 @@ static void help(void)
 
     cputsxy(2, 2, "github.com/KimJorgensen/KungFuFlash2");
 
-    textcolor(TEXTC);
+
+    textcolor(COLOR_GREEN);
+    cputsxy(10, 3, "color mod AtomicRPM");
+    textcolor(COLOR_CYAN);
+    cputsxy(11, 3, "o");
+    textcolor(COLOR_RED);
+    cputsxy(12, 3, "l");
+    textcolor(COLOR_YELLOW);
+    cputsxy(13, 3, "o");
+    textcolor(COLOR_ORANGE);
+    cputsxy(14, 3, "r");
+    textcolor(COLOR_GREEN);
+    cputsxy(16, 3, "mod AtomicRPM");
+
+
+    textcolor(BACKC);
+    cputsxy(20, 4, "\xa3\xa3\xa3\xa3\xa3\xa3\xa3\xa3\xa3");
+
+    textcolor(COLOR_YELLOW);
     cputsxy(0, 5, "<CRSR> or Joy       Change selection");
     cputsxy(0, 6, "<RETURN> or Fire    Run/Change Dir");
-    cputsxy(0, 7, " + <SHIFT> or Hold  Options");
+    cputsxy(0, 7, "<RETURN> + <SHIFT>  Options");
     cputsxy(0, 8, "<HOME>              Root Dir");
     cputsxy(0, 9, "<DEL> or Fire left  Dir Up");
     cputsxy(0, 10, "<A-Z> or Fire up    Search");
@@ -884,7 +1014,7 @@ static void help(void)
 
     cputsxy(0, 18, "Use joystick in port 2");
 
-    textcolor(COLOR_RED);
+    textcolor(COLOR_CYAN);
     cputsxy(0, 20, "KUNG FU FLASH IS PROVIDED WITH NO");
     cputsxy(0, 21, "WARRANTY OF ANY KIND.");
     textcolor(COLOR_LIGHTRED);
@@ -902,6 +1032,8 @@ static void updateDir(uint8_t last_selected)
     printElement(dir->selected);
 }
 
+
+
 static void printDirPage(void)
 {
     uint8_t element_no = 0;
@@ -918,6 +1050,7 @@ static void printDirPage(void)
     }
 }
 
+
 static void printElement(uint8_t element_no)
 {
     char *element;
@@ -925,11 +1058,11 @@ static void printElement(uint8_t element_no)
     element = dir->elements[element_no];
     if (*element++ == TEXT_ELEMENT)
     {
-        textcolor(WARNC);
+        textcolor(WARNC);  // yellow
     }
     else
     {
-        textcolor(TEXTC);
+      textcolor((element_no & 1u) ? USER_COLOR3 : USER_COLOR2);
     }
 
     if (element_no == dir->selected)
@@ -950,7 +1083,7 @@ static void showMessage(const char *text, uint8_t color)
     clrscr();
 
     revers(1);
-    textcolor(BACKC);
+    textcolor(BACKC); // purple
     cputsxy(0, 0, "                                        ");
     cputsxy(0, BOTTOM, programBar);
     revers(0);

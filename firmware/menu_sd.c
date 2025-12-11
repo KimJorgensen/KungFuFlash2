@@ -18,6 +18,51 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+#include <stdlib.h> 
+
+#ifndef SORT_MAX
+#define SORT_MAX 512
+#endif
+
+/* Only cache what we display: ELEMENT_LENGTH (39) chars max */
+#ifndef SORTED_MAX_NAME
+#define SORTED_MAX_NAME (ELEMENT_LENGTH)
+#endif
+
+typedef struct {
+    char    name[SORTED_MAX_NAME + 1];  /* 40 bytes incl. NUL */
+    BYTE    attr;                       /* AM_DIR etc. */
+    DWORD   size;                       /* file size for display */
+} sort_item_t;
+
+static sort_item_t s_items[SORT_MAX];
+static u16 s_count = 0;
+
+/* ASCII-only, case-insensitive char */
+static int ci_ascii(int ch) { return (ch >= 'a' && ch <= 'z') ? ch - 32 : ch; }
+
+/* dirs first, then case-insensitive A→Z by name */
+static int sort_item_cmp(const void *a, const void *b)
+{
+    const sort_item_t *x = (const sort_item_t *)a;
+    const sort_item_t *y = (const sort_item_t *)b;
+    int xd = (x->attr & AM_DIR) ? 1 : 0;
+    int yd = (y->attr & AM_DIR) ? 1 : 0;
+    if (xd != yd) return yd - xd;
+
+    const unsigned char *p = (const unsigned char *)x->name;
+    const unsigned char *q = (const unsigned char *)y->name;
+    while (*p || *q) {
+        int a1 = ci_ascii(*p), b1 = ci_ascii(*q);
+        if (a1 != b1) return a1 - b1;
+        if (!*p || !*q) break;
+        ++p; ++q;
+    }
+    return ci_ascii(*p) - ci_ascii(*q);
+}
+
+
+
 static void sd_format_size(char *buffer, u32 size)
 {
     char units[] = "BKmg";
@@ -76,77 +121,97 @@ static void sd_send_not_found(SD_STATE *state)
 static u8 sd_send_page(SD_STATE *state, u8 selected_element)
 {
     bool send_dot_dot = !state->in_root && state->page_no == 0;
-    bool send_not_found = state->page_no == 0;
+    bool send_not_found = (s_count == 0) && (state->page_no == 0);
 
+    u16 base = state->page_no * MAX_ELEMENTS_PAGE;
+    u8  element;
     FILINFO file_info;
-    u8 element;
-    for (element=0; element<MAX_ELEMENTS_PAGE; element++)
+
+    for (element = 0; element < MAX_ELEMENTS_PAGE; ++element)
     {
-        if (send_dot_dot)
-        {
+        if (send_dot_dot) {
             file_info.fname[0] = '.';
             file_info.fname[1] = '.';
             file_info.fname[2] = 0;
             file_info.fattrib = AM_DIR;
             send_dot_dot = false;
-        }
-        else
-        {
-            if (!dir_read(&state->end_page, &file_info))
-            {
-                file_info.fname[0] = 0;
-            }
-
-            if (file_info.fname[0])
-            {
-                send_not_found = false;
-            }
-            else
-            {
-                // End of dir
-                dir_close(&state->end_page);
+        } else {
+            u32 idx = (u32)base + element - ( (!state->in_root && state->page_no == 0) ? 1 : 0 );
+            if (idx >= s_count) {
+                /* End of cache (end of dir) */
                 state->dir_end = true;
 
-                if (send_not_found)
-                {
+                if (send_not_found) {
                     sd_send_not_found(state);
                 }
-
                 send_page_end();
                 break;
             }
+
+            /* fill a minimal FILINFO view from cache row */
+            strncpy(file_info.fname, s_items[idx].name, sizeof(file_info.fname) - 1);
+            file_info.fname[sizeof(file_info.fname) - 1] = 0;
+            file_info.fattrib = s_items[idx].attr;
+            file_info.fsize   = s_items[idx].size;
         }
 
+        /* format + send one element */
         sd_format_element(scratch_buf, &file_info);
-        if (element == selected_element)
-        {
+        if (element == selected_element) {
             scratch_buf[0] = SELECTED_ELEMENT;
         }
-
         c64_send_data(scratch_buf, ELEMENT_LENGTH);
     }
 
     return element;
 }
 
+
 static void sd_dir_open(SD_STATE *state)
 {
-    // Append star to end of search string
+    /* Append star to end of search string (existing behavior) */
     size_t search_len = strlen(state->search);
-    if (search_len && state->search[search_len-1] != '*')
-    {
+    if (search_len && state->search[search_len-1] != '*') {
         state->search[search_len] = '*';
         state->search[search_len + 1] = 0;
     }
 
-    if (!dir_open(&state->start_page, state->search))
-    {
+    /* Read current path */
+    if (!dir_open(&state->start_page, state->search)) {
         fail_to_read_sd();
     }
 
-    state->end_page = state->start_page;
+    /* Build sorted cache from all entries */
+    s_count = 0;
+    DIR_t d = state->start_page;
+    FILINFO fi;
+    while (s_count < SORT_MAX) {
+        if (!dir_read(&d, &fi)) {
+            fi.fname[0] = 0;
+        }
+        if (!fi.fname[0]) break;
+     
+		size_t nlen = strlen(fi.fname);
+		if (nlen > SORTED_MAX_NAME) nlen = SORTED_MAX_NAME;
+		memcpy(s_items[s_count].name, fi.fname, nlen);
+		s_items[s_count].name[nlen] = '\0';
+
+		s_items[s_count].attr = fi.fattrib;
+		s_items[s_count].size = fi.fsize;
+		++s_count;
+
+    }
+    dir_close(&d);
+
+    /* Sort the cache (dirs first, then A→Z) */
+    if (s_count > 1) {
+        qsort(s_items, s_count, sizeof(s_items[0]), sort_item_cmp);
+    }
+
+    /* Reset paging state */
     state->page_no = 0;
-    state->dir_end = false;
+    state->dir_end = (s_count == 0);
+    state->end_page = state->start_page; /* no longer used, but keep state consistent */
 }
 
 static void sd_send_prg_message(const char *message)
@@ -366,6 +431,12 @@ static u8 sd_handle_dir(SD_STATE *state)
             return menu->dir(menu->state);
         }
     }
+	/* append user color IDs in the tail of the name buffer (positions 36..40) */
+	scratch_buf[DIR_NAME_LENGTH - 5] = cfg_file.ui_color1_id;  /* frame */
+	scratch_buf[DIR_NAME_LENGTH - 4] = cfg_file.ui_color2_id;  /* line text  */
+	scratch_buf[DIR_NAME_LENGTH - 3] = cfg_file.ui_color3_id;  /* alt line text    */
+	scratch_buf[DIR_NAME_LENGTH - 2] = cfg_file.ui_color4_id;  /* background  */
+	scratch_buf[DIR_NAME_LENGTH - 1] = cfg_file.ui_color5_id;  /* border   */
 
     c64_send_data(scratch_buf, DIR_NAME_LENGTH);
     sd_send_page(state, selected_element);
@@ -410,71 +481,31 @@ static u8 sd_handle_change_dir(SD_STATE *state, char *path, bool select_old)
 
 static u8 sd_handle_dir_next_page(SD_STATE *state)
 {
-    if (!state->dir_end)
-    {
-        DIR_t start = state->end_page;
-        state->page_no++;
-
-        if (sd_send_page(state, MAX_ELEMENTS_PAGE) > 0)
-        {
-            state->start_page = start;
-        }
-        else
-        {
-            state->page_no--;
-        }
+    u16 max_pages = (s_count + MAX_ELEMENTS_PAGE - 1) / MAX_ELEMENTS_PAGE;
+    if (!state->in_root) { /* account for ".." on first page */
+        if (s_count + 1 > 0)
+            max_pages = ((s_count + 1) + MAX_ELEMENTS_PAGE - 1) / MAX_ELEMENTS_PAGE;
     }
-    else
-    {
+
+    if (state->page_no + 1 < max_pages) {
+        state->page_no++;
+        sd_send_page(state, MAX_ELEMENTS_PAGE);
+    } else {
         send_page_end();
     }
-
     return CMD_READ_DIR_PAGE;
 }
 
 static u8 sd_handle_dir_prev_page(SD_STATE *state)
 {
-    if (state->page_no)
-    {
-        u16 target_page = state->page_no-1;
-        bool not_found = false;
-
-        sd_dir_open(state);
-
-        u16 elements_to_skip = MAX_ELEMENTS_PAGE * target_page;
-        if (elements_to_skip && !state->in_root) elements_to_skip--;
-
-        while (elements_to_skip--)
-        {
-            FILINFO file_info;
-            if (!dir_read(&state->end_page, &file_info))
-            {
-                file_info.fname[0] = 0;
-            }
-
-            if (!file_info.fname[0])
-            {
-                not_found = true;
-                break;
-            }
-        }
-
-        if (not_found)
-        {
-            state->end_page = state->start_page;
-        }
-        else
-        {
-            state->page_no = target_page;
-            state->start_page = state->end_page;
-        }
-
+    if (state->page_no > 0) {
+        state->page_no--;
         sd_send_page(state, MAX_ELEMENTS_PAGE);
         return CMD_READ_DIR_PAGE;
     }
-
     return handle_page_end();
 }
+
 
 static u8 sd_handle_delete_file(const char *file_name)
 {
@@ -728,9 +759,10 @@ static u8 sd_handle_select(SD_STATE *state, u8 flags, u8 element)
     u8 element_no = element;
 
     cfg_file.boot_type = CFG_NONE;
-    cfg_file.img.element = ELEMENT_NOT_SELECTED;    // don't auto open T64/D64
+    cfg_file.img.element = ELEMENT_NOT_SELECTED;    /* don't auto open T64/D64 */
     cfg_file.file[0] = 0;
 
+   
     if (!state->in_root && state->page_no == 0)
     {
         if (element_no == 0)
@@ -739,36 +771,33 @@ static u8 sd_handle_select(SD_STATE *state, u8 flags, u8 element)
             {
                 return handle_file_options("..", FILE_DIR_UP, element);
             }
-
             return sd_handle_change_dir(state, "..", true);
         }
-
-        element_no--;
+        element_no--;  /* shift down to index into real entries */
     }
 
-    FILINFO file_info;
-    DIR_t dir = state->start_page;
-    for (u8 i=0; i<=element_no; i++)
-    {
-        if (!dir_read(&dir, &file_info))
-        {
-            fail_to_read_sd();
-        }
+    
+    u32 idx = (u32)state->page_no * MAX_ELEMENTS_PAGE + element_no;
 
-        if (!file_info.fname[0]) // End of dir
-        {
-            break;
-        }
+    /* On the very first page with "..", the cache starts after that row */
+    if (!state->in_root && state->page_no == 0)
+    {
+        /* idx already adjusted by element_no-- above, so nothing else to do */
     }
 
-    dir_close(&dir);
-
-    if (file_info.fname[0] == 0)
+   
+    if (idx >= s_count)
     {
-        // File not not found
+        /* Not found / clicked past end: reload directory view */
         state->search[0] = 0;
         return sd_handle_dir(state);
     }
+
+       FILINFO file_info;
+    strncpy(file_info.fname, s_items[idx].name, sizeof(file_info.fname)-1);
+    file_info.fname[sizeof(file_info.fname)-1] = 0;
+    file_info.fattrib = s_items[idx].attr;
+    file_info.fsize   = s_items[idx].size;
 
     u8 file_type = get_file_type(&file_info);
     strcpy(cfg_file.file, file_info.fname);
@@ -804,6 +833,7 @@ static u8 sd_handle_select(SD_STATE *state, u8 flags, u8 element)
 
     return sd_handle_load(state, file_info.fname, file_type, flags, element);
 }
+
 
 static u8 sd_handle_dir_up(SD_STATE *state, bool root)
 {
