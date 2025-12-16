@@ -18,7 +18,39 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+
+static const char *kColorNames[] = {
+    "black",        // 0
+    "white",        // 1
+    "red",          // 2
+    "cyan",         // 3
+    "purple",       // 4
+    "green",        // 5
+    "blue",         // 6
+    "yellow",       // 7
+    "orange",       // 8
+    "brown",        // 9
+    "light red",    // 10
+    "gray1",        // 11 (dark gray)
+    "gray2",        // 12 (medium gray)
+    "light green",  // 13
+    "light blue",   // 14
+    "gray3"         // 15 (light gray)
+};
+
 static u8 settings_flags;
+
+static u8 settings_save(OPTIONS_STATE *state, OPTIONS_ELEMENT *element, u8 flags)
+{
+    cfg_file.flags = settings_flags;
+
+    sd_send_prg_message("Saving settings.");
+    save_cfg();
+    restart_to_menu();
+
+    return CMD_NONE;
+}
+
 
 static u8 settings_refresh(OPTIONS_ELEMENT *element, const char *text)
 {
@@ -37,6 +69,77 @@ static const char * settings_basic_text(void)
     return setting_print("Persist BASIC selection",
         settings_flags & CFG_FLAG_NO_PERSIST ? "no" : "yes");
 }
+
+static u8 color_next(u8 id){ return (u8)((id+1) % UI_COL_MAX); }
+
+static const char *settings_color1_text(void){
+    sprint(scratch_buf, "%24s: %s", "Frame color", kColorNames[cfg_file.ui_color1_id]);
+    return scratch_buf;
+}
+static u8 settings_color1_change(OPTIONS_STATE *s, OPTIONS_ELEMENT *e, u8 f){
+    cfg_file.ui_color1_id = color_next(cfg_file.ui_color1_id);
+    return settings_refresh(e, settings_color1_text());
+}
+
+static const char *settings_color2_text(void){
+    sprint(scratch_buf, "%24s: %s", "Line color", kColorNames[cfg_file.ui_color2_id]);
+    return scratch_buf;
+}
+static u8 settings_color2_change(OPTIONS_STATE *s, OPTIONS_ELEMENT *e, u8 f){
+    cfg_file.ui_color2_id = color_next(cfg_file.ui_color2_id);
+    return settings_refresh(e, settings_color2_text());
+}
+
+static const char *settings_color3_text(void){
+    sprint(scratch_buf, "%24s: %s", "Alt line color", kColorNames[cfg_file.ui_color3_id]);
+    return scratch_buf;
+}
+static u8 settings_color3_change(OPTIONS_STATE *s, OPTIONS_ELEMENT *e, u8 f){
+    cfg_file.ui_color3_id = color_next(cfg_file.ui_color3_id);
+    return settings_refresh(e, settings_color3_text());
+}
+
+// --- Background color
+static const char *settings_color4_text(void){
+    sprint(scratch_buf, "%24s: %s", "Background color", kColorNames[cfg_file.ui_color4_id]);
+    return scratch_buf;
+}
+static u8 settings_color4_change(OPTIONS_STATE *s, OPTIONS_ELEMENT *e, u8 f){
+    cfg_file.ui_color4_id = color_next(cfg_file.ui_color4_id);
+    return settings_refresh(e, settings_color4_text());
+}
+
+// --- Border color
+static const char *settings_color5_text(void){
+    sprint(scratch_buf, "%24s: %s", "Border color", kColorNames[cfg_file.ui_color5_id]);
+    return scratch_buf;
+}
+static u8 settings_color5_change(OPTIONS_STATE *s, OPTIONS_ELEMENT *e, u8 f){
+    cfg_file.ui_color5_id = color_next(cfg_file.ui_color5_id);
+    return settings_refresh(e, settings_color5_text());
+}
+
+// --- Restore defaults (action row)
+static const char *settings_defaultColor_text(void){
+    return "Restore default colors";
+}
+static u8 settings_defaultColor_change(OPTIONS_STATE *s, OPTIONS_ELEMENT *e, u8 f){
+    cfg_file.ui_color1_id = UI_COL_WHITE;
+    cfg_file.ui_color2_id = UI_COL_WHITE;
+    cfg_file.ui_color3_id = UI_COL_PURPLE;
+    cfg_file.ui_color4_id = UI_COL_BLACK;
+    cfg_file.ui_color5_id = UI_COL_BLACK;
+  
+    if (cfg_file.ui_color1_id >= UI_COL_MAX) cfg_file.ui_color1_id = UI_COL_WHITE;
+    if (cfg_file.ui_color2_id >= UI_COL_MAX) cfg_file.ui_color2_id = UI_COL_WHITE;
+    if (cfg_file.ui_color3_id >= UI_COL_MAX) cfg_file.ui_color3_id = UI_COL_PURPLE;
+    if (cfg_file.ui_color4_id >= UI_COL_MAX) cfg_file.ui_color4_id = UI_COL_BLACK;
+    if (cfg_file.ui_color5_id >= UI_COL_MAX) cfg_file.ui_color5_id = UI_COL_BLACK;
+
+// Immediately persist + return to menu (same behavior as “Save”)
+    return settings_save(s, e, f);
+}
+
 
 static u8 settings_basic_change(OPTIONS_STATE *state, OPTIONS_ELEMENT *element, u8 flags)
 {
@@ -106,27 +209,27 @@ static u8 settings_device_change(OPTIONS_STATE *state, OPTIONS_ELEMENT *element,
     return settings_refresh(element, settings_device_text());
 }
 
-static u8 settings_save(OPTIONS_STATE *state, OPTIONS_ELEMENT *element, u8 flags)
-{
-    cfg_file.flags = settings_flags;
-
-    sd_send_prg_message("Saving settings.");
-    save_cfg();
-    restart_to_menu();
-
-    return CMD_NONE;
-}
 
 static u8 handle_settings(void)
 {
     settings_flags = cfg_file.flags;
 
     OPTIONS_STATE *options = options_init("Settings");
-    options_add_text_element(options, settings_basic_change, settings_basic_text());
-    options_add_text_element(options, settings_expansion_change, settings_expansion_text());
-    options_add_text_element(options, settings_autostart_change, settings_autostart_text());
-    options_add_text_element(options, settings_device_change, settings_device_text());
+    options_add_text_element(options, settings_basic_change,       settings_basic_text());
+    options_add_text_element(options, settings_expansion_change,   settings_expansion_text());
+    options_add_text_element(options, settings_autostart_change,   settings_autostart_text());
+    options_add_text_element(options, settings_device_change,      settings_device_text());
+
+    options_add_text_element(options, settings_color1_change,      settings_color1_text());
+    options_add_text_element(options, settings_color2_change,      settings_color2_text());
+    options_add_text_element(options, settings_color3_change,      settings_color3_text());
+    options_add_text_element(options, settings_color4_change,      settings_color4_text());
+    options_add_text_element(options, settings_color5_change,      settings_color5_text());
+
+    options_add_text_element(options, settings_defaultColor_change, settings_defaultColor_text()); 
+
     options_add_text_element(options, settings_save, "Save");
     options_add_dir(options, "Cancel");
     return handle_options();
 }
+

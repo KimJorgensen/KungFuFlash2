@@ -1,5 +1,5 @@
 ifndef version
-version := 2.XX
+version := 2.04a
 endif
 export version
 

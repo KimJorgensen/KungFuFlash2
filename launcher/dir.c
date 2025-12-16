@@ -50,7 +50,10 @@ void readDir(Directory *dir)
     dir->text_elements = 0;
     dir->selected = 0;
 
+    // Receive directory name and ensure NUL-termination
     kff_receive_data(dir->name, DIR_NAME_LENGTH);
+    dir->name[DIR_NAME_LENGTH] = '\0';
+
     readDirPage(dir);
 }
 
@@ -62,7 +65,10 @@ uint8_t readDirPage(Directory *dir)
 
     do
     {
+        // Receive one element (fixed length from firmware) and NUL-terminate it
         kff_receive_data(element, ELEMENT_LENGTH);
+        element[ELEMENT_LENGTH] = '\0';
+
         if (element[0] == 0)
         {
             // end of dir
@@ -79,15 +85,18 @@ uint8_t readDirPage(Directory *dir)
             dir->selected = element_no;
         }
 
+        // Advance to next slot in the page buffer
         element = dir->elements[++element_no];
     }
     while (element_no < MAX_ELEMENTS_PAGE);
 
     if (element_no)
     {
+        // Copy the first received element into the dir buffer (already NUL-terminated)
         memcpy(&dir->elements[0], first_element, sizeof(first_element));
         dir->no_of_elements = element_no;
     }
 
     return element_no;
 }
+
