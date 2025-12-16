@@ -9,8 +9,12 @@ Kung Fu Flash 2 is the big brother of [Kung Fu Flash](https://github.com/KimJorg
 * CRT files are loaded into RAM, not flash, making large CRT files startup faster. However, changes to EasyFlash cartridges are lost if power is turned off, unless saved via the menu first
 * The cartridge detects if the C64/C128 is reset. This allows the use of an additional reset button on the C64 or the built-in reset button on the C128
 * REU emulation has been added
+* Configurable color scheme
 
-![Kung Fu Flash 2 Launcher](pics/launcher.jpg)
+![Kung Fu Flash 2 Launcher](pics/pic1.JPG)
+![Kung Fu Flash 2 Launcher](pics/pic2.JPG)
+![Kung Fu Flash 2 Launcher](pics/pic3.JPG)
+![Kung Fu Flash 2 Launcher](pics/pic4.JPG)
 
 Kung Fu Flash 2 can emulate different cartridge types, load PRG files and use D64 disk images.
 Just place your desired CRT, PRG or D64 files on a FAT formatted microSD card and use the built-in launcher to execute them.
@@ -133,3 +137,4 @@ Kung Fu Flash 2 was based on or uses other open source projects:
 * [Disk2easyflash](https://csdb.dk/release/?id=150323) by ALeX Kazik
 
 and a few others. Please check the individual files for their license.
+
