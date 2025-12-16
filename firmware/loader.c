@@ -535,6 +535,22 @@ static bool save_cfg(void)
     return file_saved;
 }
 
+/* for option to delete file */
+
+static bool delete_cfg(void)
+{
+    FRESULT res = f_unlink(CFG_FILENAME);
+    if (res != FR_OK)
+    {
+       wrn("Could not delete %s (err=%d)", CFG_FILENAME, res);
+       return false;
+    }
+
+    dbg("Deleted %s", CFG_FILENAME);
+    return true;
+}
+
+
 static inline bool persist_basic_selection(void)
 {
     return (cfg_file.flags & CFG_FLAG_NO_PERSIST) == 0;
@@ -906,6 +922,7 @@ static void c64_reu_mode(void)
 
 static void c64_ef3_mode(void)
 {
+    crt_ptr = CRT_LAUNCHER;
     ef_init();
     C64_INSTALL_HANDLER(ef3_handler);
 }
