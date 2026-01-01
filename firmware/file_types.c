@@ -144,6 +144,13 @@ static u8 get_file_type(FILINFO *info)
                 return FILE_ROM;
             }
         }
+        else if (compare_extension(filename, "SID"))
+        {
+            if (info->fsize > 124)
+            {
+                return FILE_SID;
+            }
+        }
         else if (compare_extension(filename, "TXT") ||
                  compare_extension(filename, "NFO") ||
                  compare_extension(filename, "1ST"))
