@@ -828,6 +828,7 @@ static void start_text_reader(void)
                          sizeof(KFF_BUF) - (DIR_NAME_LENGTH+3));
 }
 
+
 static void c64_launcher_mode(void)
 {
     crt_ptr = CRT_LAUNCHER;

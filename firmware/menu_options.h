@@ -48,6 +48,7 @@ typedef enum
     SELECT_FLAG_VIC         = 0x04,
     SELECT_FLAG_OVERWRITE   = 0x08,
     SELECT_FLAG_DELETE      = 0x10,
+    SELECT_FLAG_CONVERT     = 0x20,
     // See SELECT_FLAGS
 } SELECT_FLAGS_EXTRA;
 
